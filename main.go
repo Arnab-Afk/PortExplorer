@@ -57,45 +57,46 @@ func scanPorts(ports <-chan int, wg *sync.WaitGroup) {
 		if err == nil {
 			conn.Close()
 			fmt.Printf("Port %d is open\n", port)
-
-			// Identify the process running on this port
-			process, err := getProcessRunningOnPort(port)
-			if err != nil {
-				fmt.Printf("Error getting process for port %d: %v\n", port, err)
-			} else {
-				fmt.Printf("Process running on port %d: %s\n", port, process)
+			pid := getPID(port)
+			if pid != "" {
+				processDetails := getProcessDetails(pid)
+				if processDetails != "" {
+					fmt.Printf("Port %d is being used by process: %s\n", port, processDetails)
+				} else {
+					fmt.Printf("Port %d is open but process details could not be retrieved.\n", port)
+				}
 			}
 		}
 	}
 }
 
-func getProcessRunningOnPort(port int) (string, error) {
-	cmd := exec.Command("powershell", "-Command", fmt.Sprintf("netstat -ano | Select-String \":%d\" | ForEach-Object { Get-Process -PID ($_.Split()[4]) }", port))
-	output, err := cmd.CombinedOutput()
+func getPID(port int) string {
+	cmd := exec.Command("powershell", "netstat -ano | Select-String", fmt.Sprintf("\"%d\"", port))
+	output, err := cmd.Output()
 	if err != nil {
-		return "", err
+		fmt.Println("Error executing netstat command:", err)
+		return ""
 	}
 
-	// Parse the output to extract the process name
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
-		if strings.Contains(line, "ProcessName") {
-			fields := strings.Fields(line)
-			processName := fields[1]
-			return processName, nil
+		fields := strings.Fields(line)
+		if len(fields) >= 5 {
+			localAddress := fields[1]
+			if strings.Contains(localAddress, fmt.Sprintf(":%d", port)) {
+				return fields[4]
+			}
 		}
 	}
-
-	return "", fmt.Errorf("no process found running on port %d", port)
+	return ""
 }
 
-func getProcessName(pid string) (string, error) {
-	// Use the `ps` command to get the process name from the process ID
-	cmd := exec.Command("ps", "-p", pid, "-o", "comm=")
-	output, err := cmd.CombinedOutput()
+func getProcessDetails(pid string) string {
+	cmd := exec.Command("powershell", "Get-WmiObject", "-Class", "Win32_Process", "-Filter", fmt.Sprintf("\"ProcessId = %s\"", pid))
+	output, err := cmd.Output()
 	if err != nil {
-		return "", err
+		fmt.Println("Error executing Get-WmiObject command:", err)
+		return ""
 	}
-
-	return strings.TrimSpace(string(output)), nil
+	return string(output)
 }
