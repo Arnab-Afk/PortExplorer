@@ -46,40 +46,45 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		<body>
 			<div class="container">
 				<h1 class="mt-5">Port Scanner</h1>
-				<form action="/scan" method="post">
-					<button type="submit" class="btn btn-primary mt-3">Start Scan</button>
-				</form>
-				<div class="mt-5">
-					<h2>Scan Results</h2>
-					<table class="table">
-						<thead>
-							<tr>
-								<th>Port</th>
-								<th>Status</th>
-								<th>Process Details</th>
-							</tr>
-						</thead>
-						<tbody id="results">
-						</tbody>
-					</table>
-				</div>
-			</div>
-			<script>
-				function fetchResults() {
-					fetch('/api/results')
-						.then(response => response.json())
-						.then(data => {
-							const resultsElement = document.getElementById('results');
-							resultsElement.innerHTML = '';
-							data.forEach(result => {
-								const row = document.createElement('tr');
-								row.innerHTML = `<td>${result.port}</td><td>${result.status}</td><td>${result.details}</td>`;
-								resultsElement.appendChild(row);
-							});
-						});
-				}
-				setInterval(fetchResults, 5000); // Fetch results every 5 seconds
-			</script>
+<form action="/scan" method="post">
+    <button type="submit" class="btn btn-primary mt-3">Start Scan</button>
+</form>
+<div class="mt-5">
+    <h2>Scan Results</h2>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Port</th>
+                <th>Status</th>
+                <th>Process Details</th>
+            </tr>
+        </thead>
+        <tbody id="results">
+        </tbody>
+    </table>
+</div>
+<script>
+    function fetchResults() {
+        fetch('/api/results')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                const resultsElement = document.getElementById('results');
+                resultsElement.innerHTML = '';
+                data.forEach(result => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `<td>${result.port}</td><td>${result.status}</td><td>${result.details}</td>`;
+                    resultsElement.appendChild(row);
+                });
+            })
+            .catch(error => console.error('There has been a problem with your fetch operation:', error));
+    }
+    setInterval(fetchResults, 5000); // Fetch results every 5 seconds
+</script>
 		</body>
 		</html>
 	`)
