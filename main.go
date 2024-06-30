@@ -3,29 +3,38 @@ package main
 import (
 	"fmt"
 	"net"
-	"time"
+	"sync"
 )
 
-// ScanPort checks if a port is open on a given host
-func ScanPort(protocol, hostname string, port int) bool {
-	address := fmt.Sprintf("%s:%d", hostname, port)
-	conn, err := net.DialTimeout(protocol, address, 1*time.Second)
-	if err != nil {
-		return false
+func main() {
+	var wg sync.WaitGroup
+	ports := make(chan int, 100)
+
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			scanPorts(ports, &wg)
+		}()
 	}
-	conn.Close()
-	return true
+
+	go func() {
+		for i := 1; i <= 65535; i++ {
+			ports <- i
+		}
+		close(ports)
+	}()
+
+	wg.Wait()
 }
 
-func main() {
-	hostname := "scanme.nmap.org"
-	startPort := 20
-	endPort := 1024
-
-	fmt.Printf("Scanning ports %d-%d on %s\n", startPort, endPort, hostname)
-	for port := startPort; port <= endPort; port++ {
-		if ScanPort("tcp", hostname, port) {
-			fmt.Printf("Port %d is open\n", port)
+func scanPorts(ports <-chan int, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for port := range ports {
+		conn, err := net.Dial("tcp", fmt.Sprintf("localhost:%d", port))
+		if err != nil {
+			continue
 		}
+		defer conn.Close()
+		fmt.Printf("Port %d is open\n", port)
 	}
 }
