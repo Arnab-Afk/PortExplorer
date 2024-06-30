@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -161,7 +162,7 @@ func scanPorts(ports <-chan int, wg *sync.WaitGroup) {
 }
 
 func getPID(port int) string {
-	cmd := exec.Command("powershell", "netstat -ano | Select-String", fmt.Sprintf("\"%d\"", port))
+	cmd := exec.Command("powershell", "netstat", "-ano","|", "Select-String", fmt.Sprintf("\"%d\"", port))
 	output, err := cmd.Output()
 	if err != nil {
 		fmt.Println("Error executing netstat command:", err)
