@@ -26,8 +26,8 @@ var (
 
 func main() {
 	http.HandleFunc("/", homeHandler)
+	http.HandleFunc("/api/results", resultsHandler)
 	http.HandleFunc("/scan", scanHandler)
-	http.HandleFunc("/results", resultsHandler)
 
 	fmt.Println("Starting server at :8080")
 	http.ListenAndServe(":8080", nil)
@@ -35,53 +35,53 @@ func main() {
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `
-	<!DOCTYPE html>
-	<html lang="en">
-	<head>
-		<meta charset="UTF-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<title>Port Scanner</title>
-		<link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" rel="stylesheet">
-	</head>
-	<body>
-		<div class="container">
-			<h1 class="mt-5">Port Scanner</h1>
-			<form action="/scan" method="post">
-				<button type="submit" class="btn btn-primary mt-3">Start Scan</button>
-			</form>
-			<div class="mt-5">
-				<h2>Scan Results</h2>
-				<table class="table">
-					<thead>
-						<tr>
-							<th>Port</th>
-							<th>Status</th>
-							<th>Process Details</th>
-						</tr>
-					</thead>
-					<tbody id="results">
-					</tbody>
-				</table>
+		<!DOCTYPE html>
+		<html lang="en">
+		<head>
+			<meta charset="UTF-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<title>Port Scanner</title>
+			<link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" rel="stylesheet">
+		</head>
+		<body>
+			<div class="container">
+				<h1 class="mt-5">Port Scanner</h1>
+				<form action="/scan" method="post">
+					<button type="submit" class="btn btn-primary mt-3">Start Scan</button>
+				</form>
+				<div class="mt-5">
+					<h2>Scan Results</h2>
+					<table class="table">
+						<thead>
+							<tr>
+								<th>Port</th>
+								<th>Status</th>
+								<th>Process Details</th>
+							</tr>
+						</thead>
+						<tbody id="results">
+						</tbody>
+					</table>
+				</div>
 			</div>
-		</div>
-		<script>
-			function fetchResults() {
-				fetch('/results')
-					.then(response => response.json())
-					.then(data => {
-						const resultsElement = document.getElementById('results');
-						resultsElement.innerHTML = '';
-						data.forEach(result => {
-							const row = document.createElement('tr');
-							row.innerHTML = `<td>${result.port}</td><td>${result.status}</td><td>${result.details}</td>`;
-							resultsElement.appendChild(row);
+			<script>
+				function fetchResults() {
+					fetch('/api/results')
+						.then(response => response.json())
+						.then(data => {
+							const resultsElement = document.getElementById('results');
+							resultsElement.innerHTML = '';
+							data.forEach(result => {
+								const row = document.createElement('tr');
+								row.innerHTML = `<td>${result.port}</td><td>${result.status}</td><td>${result.details}</td>`;
+								resultsElement.appendChild(row);
+							});
 						});
-					});
-			}
-			setInterval(fetchResults, 5000); // Fetch results every 5 seconds
-		</script>
-	</body>
-	</html>
+				}
+				setInterval(fetchResults, 5000); // Fetch results every 5 seconds
+			</script>
+		</body>
+		</html>
 	`)
 }
 
@@ -159,35 +159,4 @@ func scanPorts(ports <-chan int, wg *sync.WaitGroup) {
 			resultsMutex.Unlock()
 		}
 	}
-}
-
-func getPID(port int) string {
-	cmd := exec.Command("powershell", "netstat", "-ano","|", "Select-String", fmt.Sprintf("\"%d\"", port))
-	output, err := cmd.Output()
-	if err != nil {
-		fmt.Println("Error executing netstat command:", err)
-		return ""
-	}
-
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		fields := strings.Fields(line)
-		if len(fields) >= 5 {
-			localAddress := fields[1]
-			if strings.Contains(localAddress, fmt.Sprintf(":%d", port)) {
-				return fields[4]
-			}
-		}
-	}
-	return ""
-}
-
-func getProcessDetails(pid string) string {
-	cmd := exec.Command("powershell", "Get-WmiObject", "-Class", "Win32_Process", "-Filter", fmt.Sprintf("\"ProcessId = %s\"", pid))
-	output, err := cmd.Output()
-	if err != nil {
-		fmt.Println("Error executing Get-WmiObject command:", err)
-		return ""
-	}
-	return string(output)
 }
