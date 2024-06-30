@@ -30,7 +30,9 @@ func main() {
 	http.HandleFunc("/scan", scanHandler)
 
 	fmt.Println("Starting server at :8080")
-	http.ListenAndServe(":8080", nil)
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		fmt.Println("Server failed:", err)
+	}
 }
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
@@ -46,45 +48,40 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		<body>
 			<div class="container">
 				<h1 class="mt-5">Port Scanner</h1>
-<form action="/scan" method="post">
-    <button type="submit" class="btn btn-primary mt-3">Start Scan</button>
-</form>
-<div class="mt-5">
-    <h2>Scan Results</h2>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Port</th>
-                <th>Status</th>
-                <th>Process Details</th>
-            </tr>
-        </thead>
-        <tbody id="results">
-        </tbody>
-    </table>
-</div>
-<script>
-    function fetchResults() {
-        fetch('/api/results')
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.json();
-            })
-            .then(data => {
-                const resultsElement = document.getElementById('results');
-                resultsElement.innerHTML = '';
-                data.forEach(result => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `<td>${result.port}</td><td>${result.status}</td><td>${result.details}</td>`;
-                    resultsElement.appendChild(row);
-                });
-            })
-            .catch(error => console.error('There has been a problem with your fetch operation:', error));
-    }
-    setInterval(fetchResults, 5000); // Fetch results every 5 seconds
-</script>
+				<form action="/scan" method="post">
+					<button type="submit" class="btn btn-primary mt-3">Start Scan</button>
+				</form>
+				<div class="mt-5">
+					<h2>Scan Results</h2>
+					<table class="table">
+						<thead>
+							<tr>
+								<th>Port</th>
+								<th>Status</th>
+								<th>Process Details</th>
+							</tr>
+						</thead>
+						<tbody id="results">
+						</tbody>
+					</table>
+				</div>
+			</div>
+			<script>
+				function fetchResults() {
+					fetch('/api/results')
+						.then(response => response.json())
+						.then(data => {
+							const resultsElement = document.getElementById('results');
+							resultsElement.innerHTML = '';
+							data.forEach(result => {
+								const row = document.createElement('tr');
+								row.innerHTML = `<td>${result.port}</td><td>${result.status}</td><td>${result.details}</td>`;
+								resultsElement.appendChild(row);
+							});
+						});
+				}
+				setInterval(fetchResults, 5000); // Fetch results every 5 seconds
+			</script>
 		</body>
 		</html>
 	`)
@@ -117,7 +114,9 @@ func resultsHandler(w http.ResponseWriter, r *http.Request) {
 
 func jsonResponse(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func startScan() {
@@ -132,7 +131,8 @@ func startScan() {
 	for i := 0; i < concurrencyLevel; i++ {
 		wg.Add(1)
 		go func() {
-			scanPorts(ports, &wg)
+			defer wg.Done()
+			scanPorts(ports)
 		}()
 	}
 
@@ -147,8 +147,7 @@ func startScan() {
 	wg.Wait()
 }
 
-func scanPorts(ports <-chan int, wg *sync.WaitGroup) {
-	defer wg.Done()
+func scanPorts(ports <-chan int) {
 	for port := range ports {
 		address := fmt.Sprintf("localhost:%d", port)
 		conn, err := net.DialTimeout("tcp", address, dialTimeout)
@@ -164,4 +163,29 @@ func scanPorts(ports <-chan int, wg *sync.WaitGroup) {
 			resultsMutex.Unlock()
 		}
 	}
+}
+
+func getPID(port int) string {
+	cmd := exec.Command("lsof", "-i", fmt.Sprintf(":%d", port))
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(string(output), "\n")
+	if len(lines) > 1 {
+		fields := strings.Fields(lines[1])
+		if len(fields) > 1 {
+			return fields[1]
+		}
+	}
+	return ""
+}
+
+func getProcessDetails(pid string) string {
+	cmd := exec.Command("ps", "-p", pid, "-o", "comm=")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
 }
