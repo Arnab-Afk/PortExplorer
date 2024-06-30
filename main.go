@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"net"
+	"os/exec"
+	"strings"
 	"sync"
 	"time"
 )
@@ -55,6 +57,45 @@ func scanPorts(ports <-chan int, wg *sync.WaitGroup) {
 		if err == nil {
 			conn.Close()
 			fmt.Printf("Port %d is open\n", port)
+
+			// Identify the process running on this port
+			process, err := getProcessRunningOnPort(port)
+			if err != nil {
+				fmt.Printf("Error getting process for port %d: %v\n", port, err)
+			} else {
+				fmt.Printf("Process running on port %d: %s\n", port, process)
+			}
 		}
 	}
+}
+
+func getProcessRunningOnPort(port int) (string, error) {
+	cmd := exec.Command("powershell", "-Command", fmt.Sprintf("netstat -ano | Select-String \":%d\" | ForEach-Object { Get-Process -PID ($_.Split()[4]) }", port))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+
+	// Parse the output to extract the process name
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "ProcessName") {
+			fields := strings.Fields(line)
+			processName := fields[1]
+			return processName, nil
+		}
+	}
+
+	return "", fmt.Errorf("no process found running on port %d", port)
+}
+
+func getProcessName(pid string) (string, error) {
+	// Use the `ps` command to get the process name from the process ID
+	cmd := exec.Command("ps", "-p", pid, "-o", "comm=")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(string(output)), nil
 }
