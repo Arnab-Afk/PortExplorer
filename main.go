@@ -10,11 +10,14 @@ import (
 const (
 	concurrencyLevel = 1000                   // Number of concurrent goroutines
 	dialTimeout      = 500 * time.Millisecond // Timeout for each connection attempt
-	pauseDuration    = 10 * time.Second       // Time to wait between scans
+	pauseDuration    = 15 * time.Second       // Time to wait between scans
+	totalPorts       = 65535                  // Total number of ports to scan
 )
 
 func main() {
 	for {
+		start := time.Now()
+
 		var wg sync.WaitGroup
 		ports := make(chan int, 1000)
 
@@ -28,13 +31,16 @@ func main() {
 
 		// Send port numbers to the channel
 		go func() {
-			for i := 1; i <= 65535; i++ {
+			for i := 1; i <= totalPorts; i++ {
 				ports <- i
 			}
 			close(ports)
 		}()
 
 		wg.Wait()
+
+		elapsed := time.Since(start)
+		fmt.Printf("Scanned %d ports in %s\n", totalPorts, elapsed)
 
 		fmt.Println("Scan complete. Waiting 10 seconds before next scan...")
 		time.Sleep(pauseDuration)
